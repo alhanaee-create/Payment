@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct SettingsView: View {
     @Query(sort: \Expense.date, order: .reverse) private var expenses: [Expense]
     @AppStorage(Notifier.settingKey) private var notifyOnLog = true
+    @AppStorage(Budget.key) private var budget: Double = 0
     @Environment(\.openURL) private var openURL
 
     var body: some View {
@@ -39,6 +40,24 @@ struct SettingsView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .listRowBackground(Color.clear)
+                }
+
+                Section {
+                    HStack {
+                        Label("الميزانية", systemImage: "target")
+                        Spacer()
+                        TextField("بدون", value: $budget, format: .number.precision(.fractionLength(0...2)))
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .monospacedDigit()
+                            .frame(maxWidth: 140)
+                        Text(Fmt.defaultCurrency)
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("الميزانية الشهرية")
+                } footer: {
+                    Text("لو حطيت ميزانية، الصفحة الرئيسية بتوريك كم باقي لك وكم تقدر تصرف باليوم. خلّها فاضية أو صفر عشان تخفيها.")
                 }
 
                 Section {

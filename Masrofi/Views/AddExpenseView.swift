@@ -13,35 +13,66 @@ struct AddExpenseView: View {
     @State private var note = ""
     @State private var useLocation = true
     @State private var saving = false
+    @State private var saved = false
     @FocusState private var amountFocused: Bool
 
     private var parsed: AmountParser.Result? { AmountParser.parse(amountText) }
+    private var amountInvalid: Bool {
+        !amountText.trimmingCharacters(in: .whitespaces).isEmpty && parsed == nil
+    }
+
+    private var currencyLabel: String {
+        guard let code = parsed?.currency, !code.isEmpty else { return Fmt.defaultCurrency }
+        return code
+    }
+
+    private let columns =Array(repeating: GridItem(.flexible(), spacing: 8), count: 5)
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("المبلغ", text: $amountText)
-                        .keyboardType(.decimalPad)
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                        .focused($amountFocused)
-                    TextField("المتجر", text: $merchant)
+                    VStack(spacing: 6) {
+                        TextField("٠", text: $amountText)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.center)
+                            .font(.system(size: 52, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(category.color)
+                            .focused($amountFocused)
+                        Text(amountInvalid ? "اكتب مبلغ صحيح" : currencyLabel)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(amountInvalid ? .red : .secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .listRowBackground(Color.clear)
+                }
+
+                Section {
+                    TextField("اسم المتجر", text: $merchant)
+                        .font(.body.weight(.medium))
                         .onChange(of: merchant) { _, value in
                             if !categoryTouched { category = Categorizer.guess(value) }
                         }
                 }
-                Section {
-                    Picker("التصنيف", selection: Binding(
-                        get: { category },
-                        set: { category = $0; categoryTouched = true }
-                    )) {
+
+                Section("التصنيف") {
+                    LazyVGrid(columns: columns, spacing: 10) {
                         ForEach(ExpenseCategory.allCases) { c in
-                            Label(c.title, systemImage: c.icon).tag(c)
+                            categoryButton(c)
                         }
                     }
+                    .padding(.vertical, 6)
+                }
+
+                Section {
                     DatePicker("التاريخ", selection: $date)
-                    Toggle("احفظ موقعي الحالي", isOn: $useLocation)
-                    TextField("ملاحظة", text: $note, axis: .vertical)
+                    Toggle(isOn: $useLocation) {
+                        Label("احفظ موقعي الحالي", systemImage: "location.fill")
+                    }
+                    TextField("ملاحظة (اختياري)", text: $note, axis: .vertical)
+                        .lineLimit(1...4)
                 }
             }
             .navigationTitle("عملية جديدة")
@@ -55,10 +86,14 @@ struct AddExpenseView: View {
                         ProgressView()
                     } else {
                         Button("حفظ") { Task { await save() } }
+                            .fontWeight(.bold)
                             .disabled(parsed == nil)
                     }
                 }
             }
+            .animation(.snappy, value: category)
+            .sensoryFeedback(.selection, trigger: category)
+            .sensoryFeedback(.success, trigger: saved)
             .onAppear {
                 amountFocused = true
                 useLocation = LocationService.shared.isAuthorized
@@ -69,6 +104,33 @@ struct AddExpenseView: View {
                 }
             }
         }
+    }
+
+    private func categoryButton(_ c: ExpenseCategory) -> some View {
+        let selected = c == category
+        return Button {
+            category = c
+            categoryTouched = true
+        } label: {
+            VStack(spacing: 5) {
+                Image(systemName: c.icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(selected ? .white : c.color)
+                    .frame(width: 46, height: 46)
+                    .background(selected ? c.color : c.color.opacity(0.13),
+                                in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .scaleEffect(selected ? 1.08 : 1)
+                Text(c.title)
+                    .font(.caption2.weight(selected ? .bold : .regular))
+                    .foregroundStyle(selected ? .primary : .secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private func save() async {
@@ -88,6 +150,7 @@ struct AddExpenseView: View {
         }
         context.insert(expense)
         try? context.save()
+        saved = true
         dismiss()
     }
 }
